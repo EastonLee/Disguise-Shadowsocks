@@ -28,6 +28,9 @@ import random
 
 from shadowsocks import encrypt, eventloop, shell, common
 from shadowsocks.common import parse_header
+#easton
+from .disguise import *
+from shadowsocks import disguise
 
 # we clear at most TIMEOUTS_CLEAN_SIZE timeouts each time
 TIMEOUTS_CLEAN_SIZE = 512
@@ -185,11 +188,15 @@ class TCPRelayHandler(object):
                 self._loop.modify(self._remote_sock, event)
 
     def _write_to_sock(self, data, sock):
+        """
+        :type sock: socket.socket
+        """
         # write data to sock
         # if only some of the data are written, put remaining in the buffer
         # and update the stream to wait for writing
         if not data or not sock:
             return False
+
         uncomplete = False
         try:
             l = len(data)
@@ -224,6 +231,8 @@ class TCPRelayHandler(object):
                 logging.error('write_all_to_sock:unknown socket')
         return True
 
+    # easton: just after stage address and write real data from local
+    # append data to queue tail and send
     def _handle_stage_connecting(self, data):
         if self._is_local:
             data = self._encryptor.encrypt(data)
@@ -241,7 +250,8 @@ class TCPRelayHandler(object):
                 self._loop.add(remote_sock, eventloop.POLL_ERR)
                 data = b''.join(self._data_to_write_to_remote)
                 l = len(data)
-                s = remote_sock.sendto(data, MSG_FASTOPEN, self._chosen_server)
+                #easton
+                s = remote_sock.sendto((data), MSG_FASTOPEN, self._chosen_server)
                 if s < l:
                     data = data[s:]
                     self._data_to_write_to_remote = [data]
@@ -263,6 +273,7 @@ class TCPRelayHandler(object):
                     self.destroy()
 
     def _handle_stage_addr(self, data):
+        assert isinstance(data, str)
         try:
             if self._is_local:
                 cmd = common.ord(data[1])
@@ -276,7 +287,10 @@ class TCPRelayHandler(object):
                     addr_to_send = socket.inet_pton(self._local_sock.family,
                                                     addr)
                     port_to_send = struct.pack('>H', port)
-                    self._write_to_sock(header + addr_to_send + port_to_send,
+                    #easton modified
+                    to_send = (header + addr_to_send + port_to_send)
+                    #easton: not disguise to_local data
+                    self._write_to_sock((to_send),
                                         self._local_sock)
                     self._stage = STAGE_UDP_ASSOC
                     # just wait for the client to disconnect
@@ -301,10 +315,15 @@ class TCPRelayHandler(object):
             self._stage = STAGE_DNS
             if self._is_local:
                 # forward address to remote
-                self._write_to_sock((b'\x05\x00\x00\x01'
-                                     b'\x00\x00\x00\x00\x10\x10'),
+                #easton
+                to_send = (b'\x05\x00\x00\x01'
+                                     b'\x00\x00\x00\x00\x10\x10')
+                self._write_to_sock((to_send),
                                     self._local_sock)
+                #easton: should i disguise it?
+                #yes
                 data_to_send = self._encryptor.encrypt(data)
+                data_to_send = disguise_as_http_request(data_to_send)
                 self._data_to_write_to_remote.append(data_to_send)
                 # notice here may go into _handle_dns_resolved directly
                 self._dns_resolver.resolve(self._chosen_server[0],
@@ -389,6 +408,7 @@ class TCPRelayHandler(object):
     def _on_local_read(self):
         # handle all local read events and dispatch them to methods for
         # each stage
+        #easton: when ssclient read data from client, or ssserver read data from ssclient
         self._update_activity()
         if not self._local_sock:
             return
@@ -396,6 +416,7 @@ class TCPRelayHandler(object):
         data = None
         try:
             data = self._local_sock.recv(BUF_SIZE)
+            'on local read'
         except (OSError, IOError) as e:
             if eventloop.errno_from_exception(e) in \
                     (errno.ETIMEDOUT, errno.EAGAIN, errno.EWOULDBLOCK):
@@ -404,17 +425,30 @@ class TCPRelayHandler(object):
             self.destroy()
             return
         if not is_local:
+            data = extract_from_fake_http_request(data)
             data = self._encryptor.decrypt(data)
+            #print(hash(data))
+            #print('extracted ' + str(disguise.extract_count))
+            #print('⬆ '+str(disguise.extract_count)+' / '+str(disguise.extract_success))
+            #print(id(disguise.extract_count))
             if not data:
                 return
+        else:
+            #print('sslocal read from client')
+            #print(data[:10])
+            pass
         if self._stage == STAGE_STREAM:
             if self._is_local:
+                #print(hash(data))
+                #print('⬆ '+str(disguise.disguise_count+1))
                 data = self._encryptor.encrypt(data)
+                #easton
+                data = disguise_as_http_request(data)
             self._write_to_sock(data, self._remote_sock)
             return
         elif is_local and self._stage == STAGE_INIT:
             # TODO check auth method
-            self._write_to_sock(b'\x05\00', self._local_sock)
+            self._write_to_sock((b'\x05\00'), self._local_sock)
             self._stage = STAGE_ADDR
             return
         elif self._stage == STAGE_CONNECTING:
@@ -425,6 +459,7 @@ class TCPRelayHandler(object):
 
     def _on_remote_read(self):
         # handle all remote read events
+        #easton: when ssclient read data from web ssserver, or ssserver read data from web server
         self._update_activity()
         data = None
         try:
@@ -437,10 +472,22 @@ class TCPRelayHandler(object):
             self.destroy()
             return
         if self._is_local:
+            #easton added
+            data = extract_from_fake_http_responce(data)
             data = self._encryptor.decrypt(data)
+            print('⬇ '+str(disguise.extract_count)+' / '+str(disguise.extract_success))
+            print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
+            #print('extracted ' + str(disguise.extract_count))
+            #print(id(disguise.extract_count))
         else:
+            print('⬇ '+str(disguise.disguise_count+1))
+            print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
             data = self._encryptor.encrypt(data)
         try:
+            #easton
+            if not self._is_local:
+                data = disguise_as_http_responce(data)
+                pass
             self._write_to_sock(data, self._local_sock)
         except Exception as e:
             shell.print_exception(e)
@@ -454,16 +501,19 @@ class TCPRelayHandler(object):
         if self._data_to_write_to_local:
             data = b''.join(self._data_to_write_to_local)
             self._data_to_write_to_local = []
+            #easton: this time should not disguise
             self._write_to_sock(data, self._local_sock)
         else:
             self._update_stream(STREAM_DOWN, WAIT_STATUS_READING)
 
+    # easton: continue sending remaining data
     def _on_remote_write(self):
         # handle remote writable event
         self._stage = STAGE_STREAM
         if self._data_to_write_to_remote:
             data = b''.join(self._data_to_write_to_remote)
             self._data_to_write_to_remote = []
+            #easton: this time should not disguise
             self._write_to_sock(data, self._remote_sock)
         else:
             self._update_stream(STREAM_UP, WAIT_STATUS_READING)

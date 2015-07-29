@@ -130,11 +130,11 @@ def get_config(is_local):
     logging.basicConfig(level=logging.INFO,
                         format='%(levelname)-s: %(message)s')
     if is_local:
-        shortopts = 'hd:s:b:p:k:l:m:c:t:vq'
+        shortopts = 'hd:s:b:p:u:k:l:m:c:t:vq'
         longopts = ['help', 'fast-open', 'pid-file=', 'log-file=', 'user=',
                     'version']
     else:
-        shortopts = 'hd:s:p:k:m:c:t:vq'
+        shortopts = 'hd:s:p:u:k:m:c:t:vq'
         longopts = ['help', 'fast-open', 'pid-file=', 'log-file=', 'workers=',
                     'forbidden-ip=', 'user=', 'version']
     try:
@@ -161,6 +161,8 @@ def get_config(is_local):
         for key, value in optlist:
             if key == '-p':
                 config['server_port'] = int(value)
+            elif key == '-u':
+                config['udp_server_port'] = int(value)
             elif key == '-k':
                 config['password'] = to_bytes(value)
             elif key == '-l':
@@ -280,6 +282,7 @@ Proxy options:
   -c CONFIG              path to config file
   -s SERVER_ADDR         server address
   -p SERVER_PORT         server port, default: 8388
+  -u udp_server_port
   -b LOCAL_ADDR          local binding address, default: 127.0.0.1
   -l LOCAL_PORT          local port, default: 1080
   -k PASSWORD            password
@@ -311,6 +314,7 @@ Proxy options:
   -c CONFIG              path to config file
   -s SERVER_ADDR         server address, default: 0.0.0.0
   -p SERVER_PORT         server port, default: 8388
+  -u udp_server_port
   -k PASSWORD            password
   -m METHOD              encryption method, default: aes-256-cfb
   -t TIMEOUT             timeout in seconds, default: 300
