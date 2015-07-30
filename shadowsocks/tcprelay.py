@@ -427,10 +427,8 @@ class TCPRelayHandler(object):
         if not is_local:
             data = extract_from_fake_http_request(data)
             data = self._encryptor.decrypt(data)
-            #print(hash(data))
-            #print('extracted ' + str(disguise.extract_count))
-            #print('⬆ '+str(disguise.extract_count)+' / '+str(disguise.extract_success))
-            #print(id(disguise.extract_count))
+            print('⬆ '+str(disguise.extract_success)+' / '+str(disguise.extract_count))
+            print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
             if not data:
                 return
         else:
@@ -439,8 +437,8 @@ class TCPRelayHandler(object):
             pass
         if self._stage == STAGE_STREAM:
             if self._is_local:
-                #print(hash(data))
-                #print('⬆ '+str(disguise.disguise_count+1))
+                print('⬆ '+str(disguise.disguise_count+1))
+                print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
                 data = self._encryptor.encrypt(data)
                 #easton
                 data = disguise_as_http_request(data)
@@ -475,7 +473,7 @@ class TCPRelayHandler(object):
             #easton added
             data = extract_from_fake_http_responce(data)
             data = self._encryptor.decrypt(data)
-            print('⬇ '+str(disguise.extract_count)+' / '+str(disguise.extract_success))
+            print('⬇ '+str(disguise.extract_success)+' / '+str(disguise.extract_count))
             print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
             #print('extracted ' + str(disguise.extract_count))
             #print(id(disguise.extract_count))

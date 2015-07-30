@@ -64,8 +64,8 @@ def replace_LF_with_CRLF(string):
     return string.replace('\n', '\r\n')
 
 def disguise_as_http_request(data):
-    #global disguise_count
-    #disguise_count += 1
+    global disguise_count
+    disguise_count += 1
     #print 'disguising', disguise_count
     return (
         http_request_payload_template.replace('{1}', id_generator()).replace('{2}', data))
@@ -74,25 +74,25 @@ def extract_from_fake_http_request(request_str):
     """
     :type request_str: bytearray
     """
-    #global extract_count, extract_success
-    #extract_count += 1
+    global extract_count, extract_success
+    extract_count += 1
     #'dont match the beginning'
-    #if re.search('(GET.*?previous_pic=)', request_str, flags=re.DOTALL):
-    #    extract_success += 1
+    if re.search('(GET.*?previous_pic=)', request_str, flags=re.DOTALL):
+        extract_success += 1
     striped = re.sub('(GET.*?previous_pic=)', '', request_str, flags=re.DOTALL)
     return striped
 
 def disguise_as_http_responce(data):
-    #global disguise_count
-    #disguise_count += 1
+    global disguise_count
+    disguise_count += 1
     return http_responce_payload_template.replace('{1}', data)
 
 def extract_from_fake_http_responce(responce_str):
-    #global extract_count, extract_success
-    #extract_count += 1
+    global extract_count, extract_success
+    extract_count += 1
     'dont match the beginning'
-    #if re.search('(HTTP.*?\x89PNG\r\n\x1a\xea|\xea\x00\x00\x00IEND\xaeB\x60\x82)', responce_str, flags=re.DOTALL):
-    #    extract_success += 1
+    if re.search('(HTTP.*?\x89PNG\r\n\x1a\xea|\xea\x00\x00\x00IEND\xaeB\x60\x82)', responce_str, flags=re.DOTALL):
+        extract_success += 1
     return str(re.sub('(HTTP.*?\x89PNG\r\n\x1a\xea|\xea\x00\x00\x00IEND\xaeB\x60\x82)', '', responce_str, flags=re.DOTALL))
 
 class Test(unittest.TestCase):
