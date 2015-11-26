@@ -99,6 +99,8 @@ BUF_SIZE = 32 * 1024
 class TCPRelayHandler(object):
     def __init__(self, server, fd_to_handlers, loop, local_sock, config,
                  dns_resolver, is_local):
+        #easton: add http response header before first tcp message from ssserver to ssclient
+        self.ssserver_reply_count = 0
         self._server = server
         self._fd_to_handlers = fd_to_handlers
         self._loop = loop
@@ -315,14 +317,12 @@ class TCPRelayHandler(object):
             self._stage = STAGE_DNS
             if self._is_local:
                 # forward address to remote
-                #easton
                 to_send = (b'\x05\x00\x00\x01'
                                      b'\x00\x00\x00\x00\x10\x10')
-                self._write_to_sock((to_send),
-                                    self._local_sock)
-                #easton: should i disguise it?
-                #yes
+                self._write_to_sock(to_send, self._local_sock)
                 data_to_send = self._encryptor.encrypt(data)
+                #easton: only add http request header before first tcp
+                #from ssclient to ssserver
                 data_to_send = disguise_as_http_request(data_to_send)
                 self._data_to_write_to_remote.append(data_to_send)
                 # notice here may go into _handle_dns_resolved directly
@@ -440,8 +440,6 @@ class TCPRelayHandler(object):
                 print('⬆ '+str(disguise.disguise_count+1))
                 print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
                 data = self._encryptor.encrypt(data)
-                #easton
-                data = disguise_as_http_request(data)
             self._write_to_sock(data, self._remote_sock)
             return
         elif is_local and self._stage == STAGE_INIT:
@@ -483,9 +481,10 @@ class TCPRelayHandler(object):
             data = self._encryptor.encrypt(data)
         try:
             #easton
-            if not self._is_local:
+            if not self._is_local and self.ssserver_reply_count == 0:
                 data = disguise_as_http_responce(data)
-                pass
+            self.ssserver_reply_count += 1
+
             self._write_to_sock(data, self._local_sock)
         except Exception as e:
             shell.print_exception(e)

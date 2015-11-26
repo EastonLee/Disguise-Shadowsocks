@@ -30,11 +30,14 @@ Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2
 '''
 
 #easton: i modified the png file header, otherwise the real png will also filtered
+#easton: removed the tail for simplicity, now we only need to add header before the first tcp segment,
+#but don't need to append tail after the last
 http_responce_payload_template = '''HTTP/1.1 200 OK\r
 Content-Type: image/png\r
 Connection: keep-alive\r
 \r
-\x89PNG\r\n\x1a\xea{1}\xea\x00\x00\x00IEND\xaeB\x60\x82'''
+\x89PNG\r\n\x1a\xea{1}'''
+#\x89PNG\r\n\x1a\xea{1}\xea\x00\x00\x00IEND\xaeB\x60\x82'''
 
 '''HTTP/1.1 200 OK
 Server: JSP3/2.0.6
