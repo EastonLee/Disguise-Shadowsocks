@@ -101,6 +101,10 @@ class TCPRelayHandler(object):
                  dns_resolver, is_local):
         #easton: add http response header before first tcp message from ssserver to ssclient
         self.ssserver_reply_count = 0
+        self.sslocal_request_count = 0
+        # easton: for ssserver compatible with orginal shadowsocks
+        self.is_disguised = False
+
         self._server = server
         self._fd_to_handlers = fd_to_handlers
         self._loop = loop
@@ -199,6 +203,11 @@ class TCPRelayHandler(object):
         if not data or not sock:
             return False
 
+        # easton loc_2: equivalent with loc_1
+        if self._is_local and sock == self._remote_sock and self.sslocal_request_count == 0:
+            data = disguise_as_http_request(data)
+            self.sslocal_request_count += 1
+
         uncomplete = False
         try:
             l = len(data)
@@ -239,6 +248,13 @@ class TCPRelayHandler(object):
         if self._is_local:
             data = self._encryptor.encrypt(data)
         self._data_to_write_to_remote.append(data)
+
+        # easton loc_1: equivalent with loc_2
+        # easton: since addr data and connecting data are sent together
+        # so i combine and disguise them here
+        #if self._is_local:
+        #    self._data_to_write_to_remote = [disguise_as_http_request(''.join(self._data_to_write_to_remote))]
+
         if self._is_local and not self._fastopen_connected and \
                 self._config['fast_open']:
             # for sslocal and fastopen, we basically wait for data and use
@@ -252,8 +268,8 @@ class TCPRelayHandler(object):
                 self._loop.add(remote_sock, eventloop.POLL_ERR)
                 data = b''.join(self._data_to_write_to_remote)
                 l = len(data)
-                #easton
-                s = remote_sock.sendto((data), MSG_FASTOPEN, self._chosen_server)
+                # easton: code here is never run, but still necessary
+                s = remote_sock.sendto(disguise_as_http_request(data), MSG_FASTOPEN, self._chosen_server)
                 if s < l:
                     data = data[s:]
                     self._data_to_write_to_remote = [data]
@@ -292,8 +308,7 @@ class TCPRelayHandler(object):
                     #easton modified
                     to_send = (header + addr_to_send + port_to_send)
                     #easton: not disguise to_local data
-                    self._write_to_sock((to_send),
-                                        self._local_sock)
+                    self._write_to_sock(to_send, self._local_sock)
                     self._stage = STAGE_UDP_ASSOC
                     # just wait for the client to disconnect
                     return
@@ -321,9 +336,6 @@ class TCPRelayHandler(object):
                                      b'\x00\x00\x00\x00\x10\x10')
                 self._write_to_sock(to_send, self._local_sock)
                 data_to_send = self._encryptor.encrypt(data)
-                #easton: only add http request header before first tcp
-                #from ssclient to ssserver
-                data_to_send = disguise_as_http_request(data_to_send)
                 self._data_to_write_to_remote.append(data_to_send)
                 # notice here may go into _handle_dns_resolved directly
                 self._dns_resolver.resolve(self._chosen_server[0],
@@ -425,7 +437,7 @@ class TCPRelayHandler(object):
             self.destroy()
             return
         if not is_local:
-            data = extract_from_fake_http_request(data)
+            data, self.is_disguised = extract_from_fake_http_request(data)
             data = self._encryptor.decrypt(data)
             print('⬆ '+str(disguise.extract_success)+' / '+str(disguise.extract_count))
             print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
@@ -481,9 +493,9 @@ class TCPRelayHandler(object):
             data = self._encryptor.encrypt(data)
         try:
             #easton
-            if not self._is_local and self.ssserver_reply_count == 0:
+            if not self._is_local and self.is_disguised and self.ssserver_reply_count == 0:
                 data = disguise_as_http_responce(data)
-            self.ssserver_reply_count += 1
+                self.ssserver_reply_count += 1
 
             self._write_to_sock(data, self._local_sock)
         except Exception as e:
@@ -493,7 +505,7 @@ class TCPRelayHandler(object):
             # TODO use logging when debug completed
             self.destroy()
 
-    def _on_local_write(self):
+    def _on_local_writable(self):
         # handle local writable event
         if self._data_to_write_to_local:
             data = b''.join(self._data_to_write_to_local)
@@ -504,7 +516,7 @@ class TCPRelayHandler(object):
             self._update_stream(STREAM_DOWN, WAIT_STATUS_READING)
 
     # easton: continue sending remaining data
-    def _on_remote_write(self):
+    def _on_remote_writable(self):
         # handle remote writable event
         self._stage = STAGE_STREAM
         if self._data_to_write_to_remote:
@@ -543,7 +555,7 @@ class TCPRelayHandler(object):
                 if self._stage == STAGE_DESTROYED:
                     return
             if event & eventloop.POLL_OUT:
-                self._on_remote_write()
+                self._on_remote_writable()
         elif sock == self._local_sock:
             if event & eventloop.POLL_ERR:
                 self._on_local_error()
@@ -554,7 +566,7 @@ class TCPRelayHandler(object):
                 if self._stage == STAGE_DESTROYED:
                     return
             if event & eventloop.POLL_OUT:
-                self._on_local_write()
+                self._on_local_writable()
         else:
             logging.warn('unknown socket')
 
@@ -598,6 +610,9 @@ class TCPRelayHandler(object):
 
 class TCPRelay(object):
     def __init__(self, config, dns_resolver, is_local):
+        # easton
+        self.TCPRelayHandler_count = 0
+
         self._config = config
         self._is_local = is_local
         self._dns_resolver = dns_resolver
@@ -722,6 +737,10 @@ class TCPRelay(object):
                     TCPRelayHandler(self, self._fd_to_handlers,
                                     self._eventloop, conn[0], self._config,
                                     self._dns_resolver, self._is_local)
+                    # easton
+                    self.TCPRelayHandler_count += 1
+                    print('# of TCPRelayHandler', ':', self.TCPRelayHandler_count)
+
                 except (OSError, IOError) as e:
                     error_no = eventloop.errno_from_exception(e)
                     if error_no in (errno.EAGAIN, errno.EINPROGRESS,

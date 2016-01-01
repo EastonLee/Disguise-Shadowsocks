@@ -11,11 +11,45 @@ multi small packages sent, one big packages received
 so, the regular expression in the extraction should not start in the beginning(^)
 '''
 
-http_request_payload_template = '''GET /{1}.png HTTP/1.1\r
+http_request_payload_template = \
+'''POST /{0}.png HTTP/1.1\r
+Host: s1.hao123img.com\r
+Connection: keep-alive\r
+Pragma: no-cache\r
+Cache-Control: no-cache\r
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r
+Upgrade-Insecure-Requests: 1\r
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.73 Safari/537.36\r
+Content-Type: application/octet-stream\r
+DNT: 1\r
+Accept-Encoding: gzip, deflate\r
+Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2\r
+\r
+{1}'''
+
+
+'''GET /{0}.png HTTP/1.1\r
+Host: s1.hao123img.com\r
+Connection: keep-alive\r
+Pragma: no-cache\r
+Cache-Control: no-cache\r
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r
+Upgrade-Insecure-Requests: 1\r
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36\r
+DNT: 1\r
+Accept-Encoding: gzip, deflate, sdch\r
+Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2\r
+Cookie: previous_pic={1}; \r
+\r
+'''
+
+# this simple and short header has been recognized and blocked
+# by middle network device(gfw or amazon's firewall)
+'''GET /{0}.png HTTP/1.1\r
 Host: s1.hao123img.com\r
 Referer: http://www.hao123.com/\r
 Accept-Encoding: gzip, deflate, sdch\r
-Cookie: previous_pic={2}'''
+Cookie: previous_pic={1}'''
 
 '''GET {}.png HTTP/1.1
 Host: s1.hao123img.com
@@ -36,8 +70,8 @@ http_responce_payload_template = '''HTTP/1.1 200 OK\r
 Content-Type: image/png\r
 Connection: keep-alive\r
 \r
-\x89PNG\r\n\x1a\xea{1}'''
-#\x89PNG\r\n\x1a\xea{1}\xea\x00\x00\x00IEND\xaeB\x60\x82'''
+\x89PNG\r\n\x1a\xea{0}'''
+#\x89PNG\r\n\x1a\xea{0}\xea\x00\x00\x00IEND\xaeB\x60\x82'''
 
 '''HTTP/1.1 200 OK
 Server: JSP3/2.0.6
@@ -53,7 +87,7 @@ Cache-Control: max-age=31104000
 LFY: cq02.i3
 Accept-Ranges: bytes
 \r
-\x89PNG\r\n\x1a\x0a{1}\x00\x00\x00\x00IEND\xaeB\x60\x82'''
+\x89PNG\r\n\x1a\x0a{0}\x00\x00\x00\x00IEND\xaeB\x60\x82'''
 
 disguise_count = 0
 extract_count = 0
@@ -71,7 +105,8 @@ def disguise_as_http_request(data):
     disguise_count += 1
     #print 'disguising', disguise_count
     return (
-        http_request_payload_template.replace('{1}', id_generator()).replace('{2}', data))
+        # comfirmed: '{}'.format can handle binary
+        http_request_payload_template.format(id_generator(), data))
 
 def extract_from_fake_http_request(request_str):
     """
@@ -79,16 +114,20 @@ def extract_from_fake_http_request(request_str):
     """
     global extract_count, extract_success
     extract_count += 1
+    #to_strip = '(GET.*?previous_pic=|; \r\n\r\n)'
+    to_strip = '(POST.*?q=0\.2\r\n\r\n)'
+    is_disguised = False
     #'dont match the beginning'
-    if re.search('(GET.*?previous_pic=)', request_str, flags=re.DOTALL):
+    if re.search(to_strip, request_str, flags=re.DOTALL):
+        is_disguised = True
         extract_success += 1
-    striped = re.sub('(GET.*?previous_pic=)', '', request_str, flags=re.DOTALL)
-    return striped
+    striped = re.sub(to_strip, '', request_str, flags=re.DOTALL)
+    return striped, is_disguised
 
 def disguise_as_http_responce(data):
     global disguise_count
     disguise_count += 1
-    return http_responce_payload_template.replace('{1}', data)
+    return http_responce_payload_template.format(data)
 
 def extract_from_fake_http_responce(responce_str):
     global extract_count, extract_success
@@ -126,6 +165,9 @@ class Test(unittest.TestCase):
 
     def est_str_replace(self):
         print '{}'.replace('{}', '\x41')
+
+    def test_str_format_with_binary(self):
+        print '{}'.format('\xff')
 
     def est_unicode_reg(self):
         print len(u'\x88aa'.encode('utf-8'))
