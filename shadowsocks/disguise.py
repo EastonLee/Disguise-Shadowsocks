@@ -6,14 +6,13 @@ def id_generator(size=10, chars=string.ascii_uppercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 
 '''
-in shadowsocks, this can happen:
-multi small packages sent, one big packages received
+in shadowsocks, sometimes multiple small packages are sent, but one big packages received
 so, the regular expression in the extraction should not start in the beginning(^)
 '''
 
 http_request_payload_template = \
 '''POST /{0}.png HTTP/1.1\r
-Host: s1.hao123img.com\r
+Host: bighouse.com\r
 Connection: keep-alive\r
 Pragma: no-cache\r
 Cache-Control: no-cache\r
@@ -27,45 +26,8 @@ Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2\r
 \r
 {1}'''
 
-
-'''GET /{0}.png HTTP/1.1\r
-Host: s1.hao123img.com\r
-Connection: keep-alive\r
-Pragma: no-cache\r
-Cache-Control: no-cache\r
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r
-Upgrade-Insecure-Requests: 1\r
-User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36\r
-DNT: 1\r
-Accept-Encoding: gzip, deflate, sdch\r
-Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2\r
-Cookie: previous_pic={1}; \r
-\r
-'''
-
-# this simple and short header has been recognized and blocked
-# by middle network device(gfw or amazon's firewall)
-'''GET /{0}.png HTTP/1.1\r
-Host: s1.hao123img.com\r
-Referer: http://www.hao123.com/\r
-Accept-Encoding: gzip, deflate, sdch\r
-Cookie: previous_pic={1}'''
-
-'''GET {}.png HTTP/1.1
-Host: s1.hao123img.com
-Connection: keep-alive
-Accept: image/webp,*/*;q=0.8
-User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.134 Safari/537.36
-DNT: 1
-Referer: http://www.hao123.com/
-Accept-Encoding: gzip, deflate, sdch
-Accept-Language: en-US,en;q=0.8,zh-CN;q=0.6,zh;q=0.4,zh-TW;q=0.2
-
-'''
-
-#easton: i modified the png file header, otherwise the real png will also filtered
-#easton: removed the tail for simplicity, now we only need to add header before the first tcp segment,
-#but don't need to append tail after the last
+# easton: removed the tail for simplicity, now we only need to add header before the first tcp segment,
+# but don't need to append tail after the last
 http_responce_payload_template = '''HTTP/1.1 200 OK\r
 Content-Type: image/png\r
 Connection: keep-alive\r
@@ -73,31 +35,11 @@ Connection: keep-alive\r
 \x89PNG\r\n\x1a\xea{0}'''
 #\x89PNG\r\n\x1a\xea{0}\xea\x00\x00\x00IEND\xaeB\x60\x82'''
 
-'''HTTP/1.1 200 OK
-Server: JSP3/2.0.6
-Date: Mon, 20 Apr 2015 05:28:02 GMT
-Content-Type: image/png
-Content-Length: 3373
-Connection: keep-alive
-ETag: "3659221251"
-Last-Modified: Fri, 30 Aug 2013 03:31:33 GMT
-Expires: Sun, 01 Nov 2015 08:05:08 GMT
-Age: 14246574
-Cache-Control: max-age=31104000
-LFY: cq02.i3
-Accept-Ranges: bytes
-\r
-\x89PNG\r\n\x1a\x0a{0}\x00\x00\x00\x00IEND\xaeB\x60\x82'''
-
 disguise_count = 0
 extract_count = 0
 extract_success = 0
 
 def replace_LF_with_CRLF(string):
-    """
-    :type string: str
-    :rtype: str
-    """
     return string.replace('\n', '\r\n')
 
 def disguise_as_http_request(data):

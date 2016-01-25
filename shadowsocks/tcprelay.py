@@ -99,7 +99,7 @@ BUF_SIZE = 32 * 1024
 class TCPRelayHandler(object):
     def __init__(self, server, fd_to_handlers, loop, local_sock, config,
                  dns_resolver, is_local):
-        #easton: add http response header before first tcp message from ssserver to ssclient
+        # easton: add http response header before first tcp message from ssserver to ssclient
         self.ssserver_reply_count = 0
         self.sslocal_request_count = 0
         # easton: for ssserver compatible with orginal shadowsocks
@@ -420,7 +420,7 @@ class TCPRelayHandler(object):
     def _on_local_read(self):
         # handle all local read events and dispatch them to methods for
         # each stage
-        #easton: when ssclient read data from client, or ssserver read data from ssclient
+        # easton: when ssclient read data from client, or ssserver read data from ssclient
         self._update_activity()
         if not self._local_sock:
             return
@@ -467,7 +467,7 @@ class TCPRelayHandler(object):
 
     def _on_remote_read(self):
         # handle all remote read events
-        #easton: when ssclient read data from web ssserver, or ssserver read data from web server
+        # easton: when ssclient read data from web ssserver, or ssserver read data from web server
         self._update_activity()
         data = None
         try:
@@ -480,7 +480,7 @@ class TCPRelayHandler(object):
             self.destroy()
             return
         if self._is_local:
-            #easton added
+            # easton added
             data = extract_from_fake_http_responce(data)
             data = self._encryptor.decrypt(data)
             print('⬇ '+str(disguise.extract_success)+' / '+str(disguise.extract_count))
@@ -492,7 +492,7 @@ class TCPRelayHandler(object):
             print('{}: {}'.format(len(bytearray(data)), repr(data[:10])))
             data = self._encryptor.encrypt(data)
         try:
-            #easton
+            # easton
             if not self._is_local and self.is_disguised and self.ssserver_reply_count == 0:
                 data = disguise_as_http_responce(data)
                 self.ssserver_reply_count += 1
@@ -522,7 +522,7 @@ class TCPRelayHandler(object):
         if self._data_to_write_to_remote:
             data = b''.join(self._data_to_write_to_remote)
             self._data_to_write_to_remote = []
-            #easton: this time should not disguise
+            # easton: this time should not disguise
             self._write_to_sock(data, self._remote_sock)
         else:
             self._update_stream(STREAM_UP, WAIT_STATUS_READING)
