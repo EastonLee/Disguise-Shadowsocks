@@ -1,3 +1,16 @@
+2016-1-1
+Compatible with orginal shadowsocks
+
+2015-11-26
+Now, the fake http request header is only added before the first tcp segment from ssclient to ssserver
+the fake http response header is only added before the first tcp segment from ssserver to ssclient
+it works on any vps now!
+
+2015-07-29
+Added disguise function against shadowsocks.
+All tcp data will appear just like http request and response to avoid censorship from GFW.
+Split tcp server and udp server on different ports to avoid censorship which gets smarter nowadays.
+
 2.6.11 2015-07-10
 - Fix a compatibility issue in UDP Relay
 
